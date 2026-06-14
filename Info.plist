@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.decentespresso.ble-helper</string>
+	<key>CFBundleName</key>
+	<string>de1 ble_helper</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>The DE1 app uses Bluetooth to talk to your espresso machine and scale.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>The DE1 app uses Bluetooth to talk to your espresso machine and scale.</string>
+</dict>
+</plist>

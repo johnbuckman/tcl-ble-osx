@@ -1,0 +1,10 @@
+# build intermediates
+bin/ble_helper.arm64
+bin/ble_helper.x86_64
+*.o
+*.dSYM/
+
+# local test artifacts
+/tmp/
+ble_test_result.txt
+wish_stderr.txt
