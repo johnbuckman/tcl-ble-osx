@@ -149,6 +149,20 @@ let CCCD_UUID = "00002902-0000-1000-8000-00805F9B34FB"
 // Output: all stdout writes go through one lock so lines never interleave.
 // ----------------------------------------------------------------------------
 
+// Diagnostic log to a fixed file -- survives regardless of the stdio pipe or
+// TCC state, so we can tell whether the helper even launched and what
+// CoreBluetooth state it reached.
+// Off by default; set BLE_HELPER_DEBUG=1 in the environment to enable.
+let flogEnabled = ProcessInfo.processInfo.environment["BLE_HELPER_DEBUG"] != nil
+let flogLock = NSLock()
+func flog(_ s: String) {
+    guard flogEnabled else { return }
+    flogLock.lock(); defer { flogLock.unlock() }
+    if let f = fopen("/tmp/de1_ble_helper.log", "a") {
+        fputs("[\(getpid())] \(s)\n", f); fclose(f)
+    }
+}
+
 let outLock = NSLock()
 func emit(_ parts: [String]) {
     let line = parts.joined(separator: "\t") + "\n"
@@ -242,6 +256,7 @@ final class Bridge: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         case .unknown:      name = "unknown"
         @unknown default:   name = "unknown"
         }
+        flog("centralManagerDidUpdateState -> \(name) (authorization=\(CBManager.authorization.rawValue))")
         emit(["state", name])
 
         if central.state == .poweredOn {
@@ -396,13 +411,15 @@ final class Bridge: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     // ---- Commands from Tcl -----------------------------------------------
 
     func startScan() {
-        guard poweredOn else { wantScan = true; return }
+        guard poweredOn else { flog("startScan deferred (not poweredOn yet, state=\(central.state.rawValue))"); wantScan = true; return }
         central.scanForPeripherals(withServices: nil,
                                    options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+        flog("scanForPeripherals called -> scanning started")
         log("scanning started")
     }
 
     func handle(command line: String) {
+        flog("cmd: \(line)")
         let f = line.components(separatedBy: "\t")
         guard let cmd = f.first else { return }
         switch cmd {
@@ -475,10 +492,13 @@ final class Bridge: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
 // Wire up stdin reader + run loop
 // ----------------------------------------------------------------------------
 
+flog("=== ble_helper launched, args=\(CommandLine.arguments) ===")
 reexecOwningResponsibility()
+flog("running as responsible process; creating CBCentralManager")
 
 let bridge = Bridge()
 bridge.start()
+flog("CBCentralManager created; entering run loop")
 
 // Read stdin on a background thread; dispatch each command onto the BLE queue
 // so all CoreBluetooth state is touched from one place.

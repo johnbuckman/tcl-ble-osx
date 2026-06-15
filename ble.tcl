@@ -57,7 +57,19 @@ namespace eval ::bleosx {
     array set mtu   {}
     array set udata {}
 
-    variable helper [file join [file dirname [info script]] bin ble_helper]
+    variable helper [file normalize [file join [file dirname [info script]] bin ble_helper]]
+    variable debug 0      ;# set 1 to log helper diagnostics to the de1app logger
+}
+
+# Optional diagnostics -> the de1app logger (DEBUG level).  Off by default.
+proc ::bleosx::log {args} {
+    variable debug
+    if {!$debug} return
+    set m [join $args " "]
+    catch {
+        if {[llength [info commands ::msg]]}  { ::msg -DEBUG "ble_osx: $m" } \
+        elseif {[llength [info commands msg]]} { msg  -DEBUG "ble_osx: $m" }
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -73,15 +85,15 @@ proc ::bleosx::ensure_helper {} {
     if {![file executable $helper]} {
         error "unsupported"  ;# de1app treats this as "Bluetooth is not on"
     }
-    # NB: no "2>@stderr" -- undroidwish's stderr is a console channel that
-    # can't be used as an exec redirect target ("console2 wasn't opened for
-    # writing").  Let the helper inherit our stderr instead.
+    # NB: no "2>@stderr" -- undroidwish's stderr is a console channel that can't
+    # be an exec redirect target.  The helper inherits our stderr instead.
     if {[catch {open "|[list $helper]" r+} ch]} {
         error "unsupported"
     }
     fconfigure $ch -blocking 0 -buffering line -translation lf -encoding utf-8
     fileevent $ch readable [list ::bleosx::on_readable $ch]
     set chan $ch
+    log "helper spawned: $helper"
 }
 
 proc ::bleosx::send {args} {
@@ -98,7 +110,6 @@ proc ::bleosx::send {args} {
 proc ::bleosx::on_readable {ch} {
     variable chan
     if {[catch {gets $ch line} n]} {
-        # channel error
         catch {close $ch}
         if {$ch eq $chan} { set chan "" }
         return
@@ -130,9 +141,7 @@ proc ::bleosx::dispatch_line {line} {
         LOG {
             # Route helper diagnostics to the de1app logger if present.
             set m [join [lrange $f 1 end] "\t"]
-            if {[llength [info commands ::msg]]} {
-                catch { ::msg -DEBUG "ble_helper: $m" }
-            }
+            log "helper: $m"
             return
         }
         EV {
