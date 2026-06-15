@@ -34,3 +34,11 @@ codesign --force --sign - --identifier com.decentespresso.ble-helper "$OUT" 2>/d
 echo "done:"
 file "$OUT"
 lipo -info "$OUT"
+
+# Best-effort: also build the native in-process Tcl extension (lib/libtclble.*)
+# which the package prefers when in-process Bluetooth is available.  Skipped
+# silently if Tcl dev headers aren't installed.
+if [ -x native/build.sh ]; then
+    echo ""
+    ( cd native && ./build.sh ) || true
+fi

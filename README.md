@@ -34,27 +34,40 @@ vwait forever         ;# in a script (or tclsh) you must run the event loop
 
 ## How it works
 
+`ble.tcl` installs the `ble` command and presents the AndroWish event
+dictionaries (`scan`, `connection`, `characteristic`, `descriptor`), invoking
+your callback as `{*}$callback $event $datadict`. Underneath, it has **two
+interchangeable backends** and picks the best one automatically:
+
 ```
-  your Tcl  ──ble scanner/connect/enable/write/read──▶  ble.tcl  (this package)
-                                                            │  line protocol over a stdio pipe
-                                                            ▼
-                                                      bin/ble_helper  (Swift / CoreBluetooth)
-                                                            │
-                                                            ▼
-                                                       macOS Bluetooth
+  your Tcl ──ble …──▶ ble.tcl ──┬─▶ lib/libtclble.<dylib>   (in-process extension)  ─▶ CoreBluetooth
+                                │       used by default when Bluetooth works in-process
+                                └─▶ bin/ble_helper           (subprocess, Swift)      ─▶ CoreBluetooth
+                                        fallback that works everywhere
 ```
 
-- **`ble.tcl`** installs the `ble` command and re-emits CoreBluetooth activity as
-  the exact AndroWish event dictionaries (`scan`, `connection`, `characteristic`,
-  `descriptor`), invoking your callback as `{*}$callback $event $datadict`.
-- **`bin/ble_helper`** is a small **universal** (arm64 + x86_64) Swift binary that
-  owns the CoreBluetooth central manager and speaks a tab-separated line protocol
-  on stdin/stdout. The Tcl side spawns it with `open |...`.
+- **Native extension — `lib/libtclble.<dylib>`** (built from `native/tclble.m`).
+  A loadable Tcl extension that drives CoreBluetooth **in-process**. Lowest
+  overhead, and the **only** option on iOS (iWish), where spawning a subprocess
+  isn't allowed.
+- **Subprocess helper — `bin/ble_helper`** (universal arm64 + x86_64, built from
+  `ble_helper.swift`). Speaks a tab-separated line protocol over a stdio pipe.
 
-A separate process (rather than a loadable Tcl extension) keeps the library
-independent of the interpreter's architecture and stubs version — important
-because undroidwish on macOS is an x86_64 binary with an appended VFS, while
-modern Macs are arm64.
+**Why two?** A loadable extension runs *inside* the interpreter, so its
+Bluetooth access takes on the **interpreter's** TCC identity. That's fine for a
+signed app (or iOS), but an unsignable host like undroidwish can't get Bluetooth
+that way — and an in-process attempt there can even wedge. The helper sidesteps
+this: it re-spawns itself with **responsibility disclaimed**, becoming its *own*
+TCC identity, so it works under any host. It's also architecture- and
+stubs-independent.
+
+**Backend selection (automatic, fail-safe).** `ble.tcl` tries the native
+extension first, runs a quick `ble probe` to confirm Bluetooth actually powers
+on in-process, and **transparently falls back to the helper** otherwise — so the
+host never hangs and the choice is invisible to your code. Set the environment
+variable **`BLE_NO_NATIVE=1`** to force the helper (recommended for unsignable
+hosts like undroidwish; the bundled de1app integration does this automatically
+on macOS). Both backends expose the identical `ble` API.
 
 ### Two macOS realities it handles for you
 

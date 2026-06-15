@@ -197,12 +197,9 @@ proc ::bleosx::decode_text {hex} {
 }
 
 # ---------------------------------------------------------------------------
-# The `ble` command
+# The subprocess `ble` command.  (Installed as the global `ble` only when the
+# native loadable extension is unavailable -- see backend selection at the end.)
 # ---------------------------------------------------------------------------
-
-proc ble {sub args} {
-    return [::bleosx::cmd $sub {*}$args]
-}
 
 proc ::bleosx::cmd {sub args} {
     variable chan
@@ -349,9 +346,57 @@ proc ::bleosx::cmd {sub args} {
     }
 }
 
-# Spawn the helper eagerly so the CoreBluetooth permission prompt (if any)
-# appears at startup and the central manager is warming up by the time the app
-# calls `ble scanner` / `ble connect`.
-catch { ::bleosx::ensure_helper }
+# ---------------------------------------------------------------------------
+# Backend selection: a native loadable extension (lib/libtclble.<ext>) by
+# default, falling back to the bin/ble_helper subprocess when in-process
+# Bluetooth isn't available -- e.g. an unsignable undroidwish, where macOS TCC
+# denies Bluetooth to the interpreter itself.  The subprocess helper owns its
+# own TCC identity (via responsibility disclaim) and works everywhere, so it is
+# the safe fallback and the de1app never regresses.
+#
+# Set the environment variable BLE_NO_NATIVE to force the subprocess backend.
+# ---------------------------------------------------------------------------
+
+# Is the just-loaded native central actually usable here?  Wait briefly:
+# poweredOn -> yes; denied/unsupported, or stuck "unknown" because TCC can't be
+# resolved for this interpreter -> no, fall back.
+proc ::bleosx::native_viable {} {
+    # `ble probe` blocks via usleep (never the Tcl event loop, so it cannot
+    # wedge the host) until CoreBluetooth settles, then returns its state.
+    if {[catch {ble probe 1500} st]} { return 0 }
+    return [expr {$st eq "poweredOn"}]
+}
+
+# Install the subprocess backend: the global `ble` command + eager helper spawn
+# (so the Bluetooth prompt, if any, appears at startup and the helper warms up).
+proc ::bleosx::install_subprocess {} {
+    proc ::ble {sub args} { return [::bleosx::cmd $sub {*}$args] }
+    catch { ::bleosx::ensure_helper }
+}
+
+namespace eval ::bleosx { variable backend subprocess }
+set ::bleosx::nativelib \
+    [file join [file dirname [info script]] lib libtclble[info sharedlibextension]]
+
+if {[info exists ::env(BLE_NO_NATIVE)]} {
+    ::bleosx::log "native backend disabled by BLE_NO_NATIVE"
+} elseif {[file exists $::bleosx::nativelib] \
+          && ![catch {load $::bleosx::nativelib Ble} ::bleosx::loaderr]} {
+    # The extension registered a native `ble`.  Keep it only if BLE works here.
+    if {[::bleosx::native_viable]} {
+        set ::bleosx::backend native
+    } else {
+        catch { rename ::ble {} }   ;# drop the non-viable native command
+    }
+} else {
+    if {[info exists ::bleosx::loaderr] && $::bleosx::loaderr ne ""} {
+        ::bleosx::log "native extension not loaded ($::bleosx::loaderr); using subprocess"
+    }
+}
+
+if {$::bleosx::backend eq "subprocess"} {
+    ::bleosx::install_subprocess
+}
+::bleosx::log "ble backend = $::bleosx::backend"
 
 package provide ble 1.0
