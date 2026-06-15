@@ -218,6 +218,15 @@ proc ::bleosx::cmd {sub args} {
             return $token
         }
 
+        start {
+            # ble start <token>   (begin scanning)
+            # AndroWish separates `ble scanner` (create) from `ble start`
+            # (begin).  Our `ble scanner` already starts; this is idempotent
+            # so code that does scanner-then-start works either way.
+            send scan start
+            return ""
+        }
+
         stop {
             # ble stop <token>     (stop scanning)
             send scan stop
