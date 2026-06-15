@@ -9,10 +9,10 @@ has none** — so Tcl code written against the AndroWish BLE API (for example th
 to Bluetooth devices there. This library fills that gap using Apple's
 CoreBluetooth, so that code runs unmodified on the Mac.
 
-It works under **standard Aqua `wish`** *and* **undroidwish**, and has been
-verified end-to-end against a real Decent Espresso DE1 machine and an Atomax
-Skale scale: scan, connect, service/characteristic discovery, notification
-enable + ACK, live notifications, and reads.
+It works under **plain `tclsh`** (no Tk), **standard Aqua `wish`**, *and*
+**undroidwish**, and has been verified end-to-end against a real Decent Espresso
+DE1 machine and an Atomax Skale scale: scan, connect, service/characteristic
+discovery, notification enable + ACK, live notifications, and reads.
 
 ```tcl
 package require ble
@@ -23,7 +23,14 @@ proc cb {event data} {
     }
 }
 ble scanner cb        ;# start scanning; cb fires for every device
+vwait forever         ;# in a script (or tclsh) you must run the event loop
 ```
+
+> **Heads-up:** BLE is asynchronous, so your callback only fires while Tcl's
+> event loop is running. `wish`/undroidwish enter it automatically once the
+> script finishes, but **`tclsh` does not** — in a script end with
+> `vwait forever` (or `vwait somevar`), and at an interactive `tclsh` prompt run
+> `vwait forever` (Ctrl-C to stop) after `ble scanner`, otherwise nothing prints.
 
 ## How it works
 
@@ -76,15 +83,74 @@ cd tcl-ble-osx
 ./build.sh            # builds + ad-hoc-signs bin/ble_helper (universal)
 ```
 
-Then put the directory on `auto_path` and require it:
+A prebuilt `bin/ble_helper` is included, but rebuilding locally is recommended so
+the Bluetooth grant binds to a signature you control.
+
+`package require ble` only finds the package if its directory is on Tcl's
+`auto_path`. Pick whichever of the following fits — **always move the whole
+directory**, because the package locates `bin/ble_helper` relative to `ble.tcl`.
+
+### Adding it to your existing Tcl / undroidwish installation
+
+**Option A — one line in your script (no install).** Works everywhere; good for
+a self-contained app:
 
 ```tcl
-lappend auto_path /path/to/tcl-ble-osx
+lappend auto_path /Users/you/tcl-ble-osx
 package require ble
 ```
 
-A prebuilt `bin/ble_helper` is included, but rebuilding locally is recommended so
-the Bluetooth grant binds to a signature you control.
+**Option B — an environment variable (no copying).** Tcl prepends `TCLLIBPATH`
+to `auto_path` at startup, so `package require ble` then works in **both `tclsh`
+and `undroidwish`** with no code change. Add to `~/.zshrc` / `~/.bashrc`:
+
+```bash
+export TCLLIBPATH=/Users/you/tcl-ble-osx
+```
+
+(`TCLLIBPATH` is a space-separated list if you have several package dirs.)
+
+**Option C — install it once for everything (recommended).** `/usr/local/lib`
+is on the `auto_path` of *both* the system `tclsh`/`wish` and `undroidwish`, so a
+single symlink there makes `package require ble` work everywhere, no config:
+
+```bash
+ln -s /Users/you/tcl-ble-osx /usr/local/lib/tcl-ble-osx
+# (use `cp -R` instead of `ln -s` if you prefer a copy)
+```
+
+**Option D — `tclsh`/`wish` only.** macOS Tcl also scans `~/Library/Tcl`:
+
+```bash
+mkdir -p ~/Library/Tcl
+ln -s /Users/you/tcl-ble-osx ~/Library/Tcl/tcl-ble-osx
+```
+
+Verify any of the above:
+
+```bash
+echo 'puts [package require ble]; exit' | tclsh      # prints 1.0
+```
+
+### Using it from `tclsh`
+
+It works in headless `tclsh` exactly as in `wish` — just remember the event-loop
+note above. A complete scanner script:
+
+```tcl
+package require ble
+proc cb {event data} {
+    if {$event eq "scan"} {
+        puts "[dict get $data rssi] dBm  [string trim [dict get $data name]]  [dict get $data address]"
+    }
+}
+ble scanner cb
+after 15000 {exit}     ;# scan 15 s then quit
+vwait forever          ;# <-- run the event loop so cb actually fires
+```
+
+The first run shows the one-time macOS Bluetooth prompt (attributed to the
+helper); approve it and the grant persists.
 
 ## Integrating into an existing AndroWish app
 
