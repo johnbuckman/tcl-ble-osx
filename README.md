@@ -86,6 +86,43 @@ package require ble
 A prebuilt `bin/ble_helper` is included, but rebuilding locally is recommended so
 the Bluetooth grant binds to a signature you control.
 
+## Integrating into an existing AndroWish app
+
+Apps written for AndroWish (like the Decent Espresso `de1app`) often detect a
+working Bluetooth stack with `catch { package require ble }`, then gate features
+on an `$::android` flag because, historically, only Android had real BLE. Three
+things to watch for when adding this package so those apps "just work" on macOS:
+
+1. **Make `package require ble` find it.** Put this directory on `auto_path`
+   (or add a `package ifneeded ble 1.0 [list source .../ble.tcl]` line) before
+   the app's BLE-detection runs.
+
+2. **Don't let an Android-stub clobber the real `ble`.** AndroWish apps commonly
+   define a no-op `proc ble {args} { return 1 }` as part of stubbing Android-only
+   APIs on desktop — and if that runs *after* this package loads, it silently
+   replaces the real command, so every `ble scanner`/`ble start` becomes a no-op
+   that returns `1` and never scans. Guard any such stub:
+
+   ```tcl
+   if {[llength [info commands ble]] == 0} {
+       proc ble {args} { ... }      ;# only stub when there is no real one
+   }
+   ```
+
+3. **Broaden Android-only feature gates.** Replace `$::android == 1` BLE gates
+   with a "real BLE is present" test so they also fire on macOS (and iOS/iWish).
+   Compute it once, right after `package require ble` and *before* any `ble`
+   stub could be defined:
+
+   ```tcl
+   set ::has_bluetooth [expr {[llength [info commands ble]] > 0}]
+   # then: `$::android == 1`  -> `$::has_bluetooth`
+   #       `$::android != 1`  -> `!$::has_bluetooth`
+   ```
+
+   On macOS, run the app as "undroid" (not "android") so its Android-only APIs
+   (`borg`, etc.) still get stubbed, while keeping this real `ble` command.
+
 ## Examples
 
 | File | What it does |
