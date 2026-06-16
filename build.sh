@@ -10,7 +10,10 @@ cd "$(dirname "$0")"
 
 SRC=ble_helper.swift
 PLIST=Info.plist
-OUT=bin/ble_helper
+# NB: .bin extension is deliberate -- the de1app updater fetches the helper over
+# HTTP from a naviserver that 404s extensionless files, so a bare "ble_helper"
+# can't be auto-downloaded. The extension is irrelevant to exec/codesign.
+OUT=bin/ble_helper.bin
 mkdir -p bin
 
 MIN=11.0

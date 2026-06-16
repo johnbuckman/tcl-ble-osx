@@ -57,7 +57,7 @@ namespace eval ::bleosx {
     array set mtu   {}
     array set udata {}
 
-    variable helper [file normalize [file join [file dirname [info script]] bin ble_helper]]
+    variable helper [file normalize [file join [file dirname [info script]] bin ble_helper.bin]]
     variable debug 0      ;# set 1 to log helper diagnostics to the de1app logger
 }
 
