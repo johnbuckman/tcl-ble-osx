@@ -82,6 +82,12 @@ proc ::bleosx::ensure_helper {} {
     if {$chan ne "" && ![catch {fconfigure $chan}]} {
         return
     }
+    # Self-heal the executable bit. The de1app self-updater writes synced files
+    # as plain -rw-r--r--, so after an in-app update the helper loses +x and the
+    # check below would (wrongly) report "unsupported". Restore it best-effort.
+    if {[file exists $helper] && ![file executable $helper]} {
+        catch { file attributes $helper -permissions 0755 }
+    }
     if {![file executable $helper]} {
         error "unsupported"  ;# de1app treats this as "Bluetooth is not on"
     }
