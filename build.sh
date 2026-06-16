@@ -28,8 +28,18 @@ lipo -create bin/ble_helper.arm64 bin/ble_helper.x86_64 -output "$OUT"
 rm -f bin/ble_helper.arm64 bin/ble_helper.x86_64
 chmod +x "$OUT"
 
-# Ad-hoc sign so the embedded Info.plist / entitlements are honoured by TCC.
-codesign --force --sign - --identifier com.decentespresso.ble-helper "$OUT" 2>/dev/null || true
+# Developer ID sign (NOT ad-hoc): the helper travels in the de1app update
+# manifest and gets copied to a fresh path on each user's machine.  An ad-hoc
+# signature's TCC Bluetooth grant is keyed to the *path*, so the copied helper
+# loses the grant ("broken pipe").  A Developer ID signature gives a stable,
+# path-independent code identity, so the Bluetooth grant survives the copy.
+# Hardened runtime + the bluetooth entitlement keep it notarizable.
+SIGN_ID="${BLE_SIGN_ID:-Developer ID Application: Vid Tadel (XLS3XF57J8)}"
+ENTITLEMENTS="ble_helper.entitlements"
+codesign --force --options runtime --timestamp \
+    --entitlements "$ENTITLEMENTS" \
+    --sign "$SIGN_ID" \
+    --identifier com.decentespresso.ble-helper "$OUT"
 
 echo "done:"
 file "$OUT"

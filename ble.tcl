@@ -374,6 +374,18 @@ proc ::bleosx::install_subprocess {} {
     catch { ::bleosx::ensure_helper }
 }
 
+# This package implements `ble` on top of macOS CoreBluetooth and is meaningful
+# only there.  On any other platform (Android / Linux undroidwish) the host
+# already ships a native built-in `ble` command -- if this file ever gets picked
+# by `package require ble` on those platforms (it now travels in the de1app
+# manifest to every OS), it must NOT override that working command.  Satisfy the
+# requirement and stop before the subprocess backend below clobbers `::ble`.
+if {$::tcl_platform(os) ne "Darwin"} {
+    ::bleosx::log "non-Darwin platform ($::tcl_platform(os)); deferring to native ble"
+    package provide ble 1.0
+    return
+}
+
 namespace eval ::bleosx { variable backend subprocess }
 set ::bleosx::nativelib \
     [file join [file dirname [info script]] lib libtclble[info sharedlibextension]]
