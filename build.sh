@@ -33,11 +33,15 @@ chmod +x "$OUT"
 # signature's TCC Bluetooth grant is keyed to the *path*, so the copied helper
 # loses the grant ("broken pipe").  A Developer ID signature gives a stable,
 # path-independent code identity, so the Bluetooth grant survives the copy.
-# Hardened runtime + the bluetooth entitlement keep it notarizable.
+#
+# Deliberately NO hardened runtime (--options runtime): the host app
+# (undroidwish, appended VFS) can't be notarized anyway, so it buys nothing --
+# and under hardened runtime, the FIRST-time Bluetooth grant SIGABRT-crashes the
+# helper ("...must contain NSBluetoothAlwaysUsageDescription...") instead of
+# presenting the prompt, even though the key IS embedded.  Plain Developer ID
+# lets TCC read the embedded usage description and prompt normally.
 SIGN_ID="${BLE_SIGN_ID:-Developer ID Application: Vid Tadel (XLS3XF57J8)}"
-ENTITLEMENTS="ble_helper.entitlements"
-codesign --force --options runtime --timestamp \
-    --entitlements "$ENTITLEMENTS" \
+codesign --force --timestamp \
     --sign "$SIGN_ID" \
     --identifier com.decentespresso.ble-helper "$OUT"
 

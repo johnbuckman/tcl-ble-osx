@@ -83,6 +83,19 @@ func reexecOwningResponsibility() {
     posix_spawnattr_init(&attr)
     _ = setDisclaim(&attr, 1)
 
+    // Force the disclaimed child to inherit our stdio: the Tcl pipe lives on
+    // fds 0/1 (stderr on 2).  Some parents open that pipe close-on-exec
+    // (e.g. undroidwish's `open "|helper" r+`), which would drop the fds across
+    // this re-exec -- the child would then have no pipe and Tcl would see
+    // "broken pipe" on its first write.  posix_spawn_file_actions_adddup2(fd,fd)
+    // keeps each fd open in the child (POSIX: dup2 onto the same fd clears
+    // FD_CLOEXEC), so the pipe survives the disclaim.
+    var fa: posix_spawn_file_actions_t?
+    posix_spawn_file_actions_init(&fa)
+    posix_spawn_file_actions_adddup2(&fa, 0, 0)
+    posix_spawn_file_actions_adddup2(&fa, 1, 1)
+    posix_spawn_file_actions_adddup2(&fa, 2, 2)
+
     // argv = original args + marker; environment passed through unchanged.
     var argv: [UnsafeMutablePointer<CChar>?] = CommandLine.arguments.map { strdup($0) }
     argv.append(strdup(DISCLAIM_FLAG))
@@ -90,8 +103,9 @@ func reexecOwningResponsibility() {
 
     var pid: pid_t = 0
     let rc = pathBuf.withUnsafeBufferPointer { pb in
-        posix_spawn(&pid, pb.baseAddress, nil, &attr, argv, environ)
+        posix_spawn(&pid, pb.baseAddress, &fa, &attr, argv, environ)
     }
+    posix_spawn_file_actions_destroy(&fa)
     posix_spawnattr_destroy(&attr)
     argv.forEach { if let p = $0 { free(p) } }
 
