@@ -353,14 +353,27 @@ proc ::bleosx::cmd {sub args} {
 }
 
 # ---------------------------------------------------------------------------
-# Backend selection: a native loadable extension (lib/libtclble.<ext>) by
-# default, falling back to the bin/ble_helper subprocess when in-process
-# Bluetooth isn't available -- e.g. an unsignable undroidwish, where macOS TCC
-# denies Bluetooth to the interpreter itself.  The subprocess helper owns its
-# own TCC identity (via responsibility disclaim) and works everywhere, so it is
-# the safe fallback and the de1app never regresses.
+# Backend selection: the bin/ble_helper SUBPROCESS by default, with the native
+# in-process extension (lib/libtclble.<ext>) only as an explicit opt-in.
 #
-# Set the environment variable BLE_NO_NATIVE to force the subprocess backend.
+# The native backend creates a CoreBluetooth central INSIDE this interpreter.
+# On a host that has no embedded NSBluetoothAlwaysUsageDescription -- plain
+# tclsh, or the unsignable undroidwish -- macOS TCC ABORTS the whole process
+# (SIGABRT) the instant the dylib loads and touches CoreBluetooth.  That abort
+# is uncatchable: a `catch` around `load` cannot save us.  So we must NOT load
+# the native extension unless the caller has told us it is safe.
+#
+# The subprocess helper owns its own TCC identity (via responsibility disclaim)
+# and carries its own usage description, so it works on EVERY interpreter --
+# tclsh, undroidwish, signed or not.  Defaulting to it means callers never have
+# to remember an env var to avoid the crash; the de1app never regresses.
+#
+# Env vars (both optional):
+#   BLE_USE_NATIVE   opt IN to the in-process native backend -- set this only
+#                    from a host that can hold Bluetooth in-process (a signed
+#                    app whose Info.plist has NSBluetoothAlwaysUsageDescription).
+#   BLE_NO_NATIVE    force the subprocess backend (now the default; kept so old
+#                    callers that set it keep working -- it always wins).
 # ---------------------------------------------------------------------------
 
 # Is the just-loaded native central actually usable here?  Wait briefly:
@@ -396,8 +409,10 @@ namespace eval ::bleosx { variable backend subprocess }
 set ::bleosx::nativelib \
     [file join [file dirname [info script]] lib libtclble[info sharedlibextension]]
 
-if {[info exists ::env(BLE_NO_NATIVE)]} {
-    ::bleosx::log "native backend disabled by BLE_NO_NATIVE"
+if {![info exists ::env(BLE_USE_NATIVE)] || [info exists ::env(BLE_NO_NATIVE)]} {
+    # Default path: never load the native dylib (which would SIGABRT on a host
+    # without a Bluetooth usage description). Use the always-safe subprocess.
+    ::bleosx::log "native backend not requested; using subprocess (set BLE_USE_NATIVE to opt in)"
 } elseif {[file exists $::bleosx::nativelib] \
           && ![catch {load $::bleosx::nativelib Ble} ::bleosx::loaderr]} {
     # The extension registered a native `ble`.  Keep it only if BLE works here.

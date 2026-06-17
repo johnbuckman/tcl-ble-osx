@@ -83,18 +83,23 @@ func reexecOwningResponsibility() {
     posix_spawnattr_init(&attr)
     _ = setDisclaim(&attr, 1)
 
-    // Force the disclaimed child to inherit our stdio: the Tcl pipe lives on
-    // fds 0/1 (stderr on 2).  Some parents open that pipe close-on-exec
-    // (e.g. undroidwish's `open "|helper" r+`), which would drop the fds across
-    // this re-exec -- the child would then have no pipe and Tcl would see
-    // "broken pipe" on its first write.  posix_spawn_file_actions_adddup2(fd,fd)
-    // keeps each fd open in the child (POSIX: dup2 onto the same fd clears
-    // FD_CLOEXEC), so the pipe survives the disclaim.
+    // Force the disclaimed child to inherit our stdio. The Tcl pipe lives on
+    // fds 0 and 1; some parents open it close-on-exec (e.g. undroidwish's
+    // `open "|helper" r+`), which would drop the fds across this re-exec --
+    // the child would then have no pipe and Tcl would see "broken pipe" on its
+    // first write. posix_spawn_file_actions_adddup2(fd,fd) keeps each fd open
+    // in the child (POSIX: dup2 onto the same fd clears FD_CLOEXEC), so the
+    // pipe survives the disclaim.
+    //
+    // ONLY dup 0 and 1. Do NOT touch fd 2: undroidwish's stderr is a "console2"
+    // channel that is not a real fd, so adddup2(2,2) makes posix_spawn FAIL --
+    // the disclaim then silently falls back to running in-process under the
+    // unsignable host's identity, where TCC never grants Bluetooth (state stays
+    // "unknown"). The helper doesn't need stderr (it logs via flog to a file).
     var fa: posix_spawn_file_actions_t?
     posix_spawn_file_actions_init(&fa)
     posix_spawn_file_actions_adddup2(&fa, 0, 0)
     posix_spawn_file_actions_adddup2(&fa, 1, 1)
-    posix_spawn_file_actions_adddup2(&fa, 2, 2)
 
     // argv = original args + marker; environment passed through unchanged.
     var argv: [UnsafeMutablePointer<CChar>?] = CommandLine.arguments.map { strdup($0) }

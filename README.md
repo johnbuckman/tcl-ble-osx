@@ -61,13 +61,18 @@ this: it re-spawns itself with **responsibility disclaimed**, becoming its *own*
 TCC identity, so it works under any host. It's also architecture- and
 stubs-independent.
 
-**Backend selection (automatic, fail-safe).** `ble.tcl` tries the native
-extension first, runs a quick `ble probe` to confirm Bluetooth actually powers
-on in-process, and **transparently falls back to the helper** otherwise — so the
-host never hangs and the choice is invisible to your code. Set the environment
-variable **`BLE_NO_NATIVE=1`** to force the helper (recommended for unsignable
-hosts like undroidwish; the bundled de1app integration does this automatically
-on macOS). Both backends expose the identical `ble` API.
+**Backend selection (safe by default).** `ble.tcl` uses the **subprocess
+helper by default** — it works on every interpreter (tclsh, undroidwish, signed
+or not), so you never have to set anything to avoid a crash. The native
+in-process extension is **opt-in only**: set **`BLE_USE_NATIVE=1`** from a host
+that can legitimately hold Bluetooth in-process (a signed app whose Info.plist
+carries `NSBluetoothAlwaysUsageDescription`). This is deliberate: loading the
+native dylib in a host *without* a usage description (plain tclsh, the
+unsignable undroidwish) makes macOS TCC abort the whole process with an
+**uncatchable SIGABRT** the instant it touches CoreBluetooth — so the library
+must never load it unasked. `BLE_NO_NATIVE=1` still forces the helper (now the
+default, kept for backward compatibility). Both backends expose the identical
+`ble` API.
 
 ### Two macOS realities it handles for you
 
