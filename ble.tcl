@@ -262,6 +262,22 @@ proc ::bleosx::cmd {sub args} {
             return $handle
         }
 
+        reconnect {
+            # ble reconnect <handle>
+            # AndroWish provides this; the de1app calls it (e.g. in
+            # ble_connect_to_scale) to retry/nudge an in-progress or dropped
+            # connection. Re-issue the connect for the handle's stored address --
+            # CoreBluetooth's connect is idempotent, so this safely re-attempts.
+            # Lenient: do nothing for an unknown handle (the caller is in an
+            # `after` script and an error there is just noise).
+            set handle [lindex $args 0]
+            if {[info exists addr($handle)]} {
+                ensure_helper
+                send connect $handle $addr($handle) 1
+            }
+            return $handle
+        }
+
         close - disconnect {
             # ble close <handle>   (connection handle or scanner token)
             set handle [lindex $args 0]
