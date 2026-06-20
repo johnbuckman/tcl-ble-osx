@@ -26,7 +26,7 @@
  * matching ble.tcl (events: scan / connection / characteristic / descriptor).
  *
  * Adapted from John Buckman's iWish ble extension (iwish/ble-ios/tclBLEios.m).
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: TCL
  */
 
 #include <tcl.h>

@@ -324,7 +324,7 @@ code-signed (e.g. undroidwish) and you need the Bluetooth prompt to appear.
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+Tcl/Tk license (a BSD-style license). See [LICENSE](LICENSE).
 
 Built to bring the Decent Espresso `de1app` to macOS; usable by any Tcl program
 that wants Bluetooth LE on the Mac.

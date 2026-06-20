@@ -2,7 +2,7 @@
 //
 // Tcl BLE Library for OSX -- https://github.com/johnbuckman/tcl-ble-osx
 // Copyright (C) 2026 John Buckman
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: TCL
 //
 // CoreBluetooth <-> stdio bridge for the OSX "ble" Tcl package.
 //

@@ -7,7 +7,7 @@
 # Run:  /usr/local/bin/wish8.6 examples/skale.tcl
 #       (or any AndroWish / undroidwish)
 #
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: TCL
 
 set here [file dirname [file normalize [info script]]]
 lappend auto_path [file join $here ..]        ;# the library dir (ble.tcl / pkgIndex.tcl)
